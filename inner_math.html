@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Quest</title>
+  <style>
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { height: 100%; }
+
+    body {
+      height: 100%;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #080c14;
+      color: #d0d8e8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      overflow-y: auto;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Main container ─────────────────────────────────────── */
+    .panel {
+      width: 100%;
+      max-width: 288px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       START SCREEN
+    ══════════════════════════════════════════════════════════ */
+    .start-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      text-align: center;
+      padding: 10px 0;
+    }
+
+    .start-icon { font-size: 2.6rem; line-height: 1; }
+
+    .start-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #d0d8e8;
+      letter-spacing: -0.01em;
+    }
+
+    .start-desc {
+      font-size: 0.73rem;
+      color: #5c7590;
+      line-height: 1.6;
+    }
+
+    .feature-chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .chip {
+      font-size: 0.63rem;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      color: #5c7590;
+    }
+
+    .start-btn {
+      padding: 11px 32px;
+      border-radius: 8px;
+      border: 1px solid #22c97a40;
+      background: #22c97a18;
+      color: #22c97a;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.2s;
+      font-family: inherit;
+      letter-spacing: 0.06em;
+    }
+    .start-btn:hover { background: #22c97a28; box-shadow: 0 0 20px #22c97a1a; }
+
+    /* ══════════════════════════════════════════════════════════
+       GAME UI
+    ══════════════════════════════════════════════════════════ */
+    #gameUI {
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+    }
+    #gameUI.hidden { display: none !important; }
+
+    /* ── Stats row ──────────────────────────────────────────── */
+    .stats {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 6px;
+      align-items: stretch;
+    }
+
+    .stat-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+    }
+
+    .stat-icon { font-size: 0.82rem; flex-shrink: 0; }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-lbl {
+      font-size: 0.54rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #3a5070;
+      line-height: 1.2;
+    }
+
+    .stat-num {
+      font-size: 0.95rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #d0d8e8;
+      line-height: 1.1;
+    }
+
+    /* Level pill — purple */
+    .stat-pill.lv { border-color: #9b72e840; }
+    .stat-pill.lv .stat-num { color: #9b72e8; }
+
+    /* Streak pill — orange */
+    .stat-pill.sk { border-color: #f8b42840; }
+    .stat-pill.sk .stat-num { color: #f8b428; }
+
+    /* Score card — center, accent */
+    .score-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 5px 8px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      border-radius: 8px;
+    }
+
+    .score-lbl {
+      font-size: 0.54rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #3a5070;
+    }
+
+    .score-num {
+      font-size: 1.2rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #d0d8e8;
+      line-height: 1.1;
+    }
+
+    /* ── Level progress ─────────────────────────────────────── */
+    .level-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .prog-bg {
+      flex: 1;
+      height: 3px;
+      background: #1e2d45;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .prog-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #7b5ea7, #9b72e8);
+      transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .prog-label {
+      font-size: 0.6rem;
+      color: #3a5070;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Question card ──────────────────────────────────────── */
+    .question-card {
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      border-radius: 12px;
+      padding: 18px 14px 15px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: border-color 0.18s, background 0.18s;
+    }
+
+    .question-card.flash-ok  { border-color: #22c97a55; background: #22c97a09; }
+    .question-card.flash-err { border-color: #f0567855; background: #f0567809; }
+
+    .op-label {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #3a5070;
+    }
+
+    .question-text {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #d0d8e8;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    /* ── Answer buttons ─────────────────────────────────────── */
+    .answers-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .ans-btn {
+      padding: 14px 6px;
+      border-radius: 8px;
+      border: 1px solid #1e2d45;
+      background: #0e1420;
+      color: #d0d8e8;
+      font-size: 1.08rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s, transform 0.08s, color 0.12s;
+      font-family: inherit;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+
+    .ans-btn:hover:not(:disabled) {
+      border-color: #3d8ef860;
+      background: #3d8ef812;
+      color: #3d8ef8;
+    }
+
+    .ans-btn:active:not(:disabled) { transform: scale(0.95); }
+    .ans-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .ans-btn.correct {
+      border-color: #22c97a60;
+      background: #22c97a1a;
+      color: #22c97a;
+    }
+
+    .ans-btn.wrong {
+      border-color: #f0567860;
+      background: #f056781a;
+      color: #f05678;
+    }
+
+    /* ── Timer bar ──────────────────────────────────────────── */
+    .timer-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .timer-label {
+      font-size: 0.65rem;
+      color: #3a5070;
+      font-variant-numeric: tabular-nums;
+      width: 22px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .timer-bg {
+      flex: 1;
+      height: 4px;
+      background: #1e2d45;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .timer-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: #3d8ef8;
+      transition: width 0.12s linear, background 0.3s;
+    }
+
+    .timer-fill.warn   { background: #f8b428; }
+    .timer-fill.danger { background: #f05678; }
+
+    /* ── Toast / status bar ─────────────────────────────────── */
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 11px;
+      border-radius: 7px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      font-size: 0.71rem;
+      color: #3a5070;
+      min-height: 32px;
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .toast-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #3a5070;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .toast.good  { color: #22c97a; border-color: #22c97a30; }
+    .toast.good  .toast-dot { background: #22c97a; }
+    .toast.bad   { color: #f05678; border-color: #f0567830; }
+    .toast.bad   .toast-dot { background: #f05678; }
+    .toast.info  { color: #9b72e8; border-color: #9b72e830; }
+    .toast.info  .toast-dot { background: #9b72e8; }
+
+    /* ── Utility ────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div class="panel">
+
+    <!-- ══ START SCREEN ══════════════════════════════════════ -->
+    <div class="start-screen" id="startScreen">
+      <div class="start-icon">🧮</div>
+      <div class="start-title">Math Quest</div>
+      <div class="start-desc">
+        Answer arithmetic questions as fast<br>
+        as you can. Build streaks for bonuses!
+      </div>
+      <div class="feature-chips">
+        <span class="chip">⚡ Speed bonus</span>
+        <span class="chip">🔥 Streak multiplier</span>
+        <span class="chip">📈 4 difficulty levels</span>
+        <span class="chip">📡 Live event bridge</span>
+      </div>
+      <button class="start-btn" onclick="startGame()">▶ Start Game</button>
+    </div>
+
+    <!-- ══ GAME UI ════════════════════════════════════════════ -->
+    <div id="gameUI" class="hidden">
+
+      <!-- Stats: Level | Score | Streak -->
+      <div class="stats">
+        <div class="stat-pill lv">
+          <span class="stat-icon">🎮</span>
+          <div class="stat-info">
+            <span class="stat-lbl">Level</span>
+            <span class="stat-num" id="statLevel">1</span>
+          </div>
+        </div>
+        <div class="score-card">
+          <div class="score-lbl">Score</div>
+          <div class="score-num" id="statScore">0</div>
+        </div>
+        <div class="stat-pill sk">
+          <span class="stat-icon">🔥</span>
+          <div class="stat-info">
+            <span class="stat-lbl">Streak</span>
+            <span class="stat-num" id="statStreak">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Level progress bar: X / 5 correct to level up -->
+      <div class="level-progress">
+        <div class="prog-bg">
+          <div class="prog-fill" id="levelProg" style="width:0%"></div>
+        </div>
+        <span class="prog-label" id="progLabel">0 / 5</span>
+      </div>
+
+      <!-- Question display -->
+      <div class="question-card" id="questionCard">
+        <div class="op-label" id="opLabel">Addition</div>
+        <div class="question-text" id="questionText">—</div>
+      </div>
+
+      <!-- 2 × 2 answer choices -->
+      <div class="answers-grid">
+        <button class="ans-btn" id="btn0" onclick="pick(0)"></button>
+        <button class="ans-btn" id="btn1" onclick="pick(1)"></button>
+        <button class="ans-btn" id="btn2" onclick="pick(2)"></button>
+        <button class="ans-btn" id="btn3" onclick="pick(3)"></button>
+      </div>
+
+      <!-- Countdown timer -->
+      <div class="timer-row">
+        <span class="timer-label" id="timerLabel">10s</span>
+        <div class="timer-bg">
+          <div class="timer-fill" id="timerFill" style="width:100%"></div>
+        </div>
+      </div>
+
+      <!-- Feedback toast -->
+      <div class="toast" id="toast">
+        <span class="toast-dot"></span>
+        <span id="toastText">Good luck!</span>
+      </div>
+
+    </div><!-- /#gameUI -->
+
+  </div><!-- /.panel -->
+
+  <script>
+    /* ══════════════════════════════════════════════════════════
+       GAME STATE
+    ══════════════════════════════════════════════════════════ */
+    let score = 0, streak = 0, bestStreak = 0;
+    let level = 1, correctInLevel = 0;
+    let timerId = null, timeLeft = 10, maxTime = 10;
+    let rightAnswer = null, answered = false;
+    let toastTimer  = null;
+
+    /** Correct answers needed before levelling up */
+    const TO_LEVEL_UP = 5;
+
+    /** Human-readable operation names */
+    const OP_NAME = {
+      '+': 'Addition',
+      '−': 'Subtraction',
+      '×': 'Multiplication',
+      '÷': 'Division',
+    };
+
+    /* ══════════════════════════════════════════════════════════
+       GAME LIFECYCLE
+    ══════════════════════════════════════════════════════════ */
+    function startGame() {
+      score = streak = bestStreak = correctInLevel = 0;
+      level = 1;
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('gameUI').classList.remove('hidden');
+      fire('game-start', { level });
+      nextQ();
+    }
+
+    function nextQ() {
+      answered = false;
+      resetButtons();
+
+      const q     = genQuestion();
+      rightAnswer = q.answer;
+
+      // Timer gets faster as level increases, minimum 5 s
+      maxTime = Math.max(5, 10 - Math.floor((level - 1) * 0.9));
+      timeLeft = maxTime;
+
+      document.getElementById('opLabel').textContent      = OP_NAME[q.op] || q.op;
+      document.getElementById('questionText').textContent = q.text;
+
+      // Assign shuffled choices to buttons
+      const choices = buildChoices(q.answer);
+      for (let i = 0; i < 4; i++) {
+        const b = document.getElementById(`btn${i}`);
+        b.textContent    = choices[i];
+        b.dataset.answer = choices[i];
+      }
+
+      updateHUD();
+      runTimer();
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       QUESTION GENERATION
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Picks an operation appropriate for the current level and
+     * builds a question with a solvable, positive-integer answer.
+     */
+    function genQuestion() {
+      const ops = level <= 1 ? ['+']
+                : level <= 2 ? ['+', '−']
+                : level <= 3 ? ['+', '−', '×']
+                :              ['+', '−', '×', '÷'];
+
+      const op  = ops[~~(Math.random() * ops.length)];
+      const rng = Math.min(5 + level * 3, 25);  // numeric range grows with level
+
+      let a, b, ans;
+      switch (op) {
+        case '+':
+          a = rnd(1, rng); b = rnd(1, rng); ans = a + b;
+          break;
+        case '−':
+          a = rnd(2, rng); b = rnd(1, a); ans = a - b;
+          break;
+        case '×':
+          a = rnd(2, Math.min(5 + level, 12));
+          b = rnd(2, Math.min(5 + level, 12));
+          ans = a * b;
+          break;
+        case '÷':
+          b   = rnd(2, Math.min(4 + level, 12));
+          ans = rnd(2, Math.min(4 + level, 12));
+          a   = b * ans;   // guaranteed whole-number result
+          break;
+      }
+
+      return { op, text: `${a} ${op} ${b} = ?`, answer: ans };
+    }
+
+    /**
+     * Builds 4 shuffled answer choices: 1 correct + 3 plausible distractors.
+     * @param {number} correct - The right answer
+     * @returns {number[]} Shuffled array of 4 choices
+     */
+    function buildChoices(correct) {
+      const set  = new Set([correct]);
+      let tries  = 0;
+      const spread = Math.max(3, Math.ceil(correct * 0.35));
+
+      while (set.size < 4 && tries++ < 80) {
+        const c = correct + rnd(-spread, spread);
+        if (c > 0 && c !== correct) set.add(c);
+      }
+      // Fallback if spread is too narrow
+      while (set.size < 4) set.add(correct + set.size * 4);
+
+      return shuffle([...set]);
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       ANSWER HANDLING
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Called when the player taps an answer button.
+     * @param {number} idx - Button index 0–3
+     */
+    function pick(idx) {
+      if (answered) return;
+      answered = true;
+      clearInterval(timerId);
+
+      const chosen    = parseInt(document.getElementById(`btn${idx}`).dataset.answer, 10);
+      const isOk      = chosen === rightAnswer;
+      const timeTaken = +(maxTime - timeLeft).toFixed(1);
+
+      lockButtons(idx, isOk);
+
+      if (isOk) {
+        streak++;
+        bestStreak      = Math.max(bestStreak, streak);
+        correctInLevel++;
+
+        // Scoring: base 10 + time bonus + streak bonus
+        const tBonus = Math.max(0, Math.floor(timeLeft));
+        const sBonus = streak >= 3 ? (streak - 2) * 2 : 0;
+        const pts    = 10 + tBonus + sBonus;
+        score += pts;
+
+        flashCard(true);
+        showToast(
+          streak >= 3
+            ? `+${pts} pts  🔥 Streak ×${streak}!`
+            : `+${pts} pts${tBonus ? `  (+${tBonus} speed)` : ''}`,
+          'good'
+        );
+
+        fire('answer', { correct: true, pts, score, streak, timeTaken });
+
+        // Fire streak milestone events
+        if (streak === 3 || streak === 5 || (streak > 5 && streak % 5 === 0)) {
+          fire('streak', { streak, score });
+        }
+
+        // Level-up check
+        if (correctInLevel >= TO_LEVEL_UP) {
+          correctInLevel = 0;
+          level++;
+          setTimeout(() => showToast(`🎉 Level ${level} unlocked! Faster now…`, 'info'), 60);
+          fire('level-up', { level, score, bestStreak });
+        }
+      } else {
+        streak = 0;
+        flashCard(false);
+        showToast(`✗  Correct answer: ${rightAnswer}`, 'bad');
+        fire('answer', { correct: false, chosen, expected: rightAnswer, score, streak: 0, timeTaken });
+      }
+
+      updateHUD();
+      setTimeout(nextQ, 950);
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       TIMER
+    ══════════════════════════════════════════════════════════ */
+    function runTimer() {
+      paintTimer();
+      timerId = setInterval(() => {
+        timeLeft = Math.max(0, +(timeLeft - 0.1).toFixed(2));
+        paintTimer();
+        if (timeLeft <= 0) {
+          clearInterval(timerId);
+          onTimeout();
+        }
+      }, 100);
+    }
+
+    function paintTimer() {
+      const pct  = (timeLeft / maxTime) * 100;
+      const fill = document.getElementById('timerFill');
+      fill.style.width = `${pct}%`;
+      fill.className   = 'timer-fill' +
+        (pct < 25 ? ' danger' : pct < 50 ? ' warn' : '');
+      document.getElementById('timerLabel').textContent = `${Math.ceil(timeLeft)}s`;
+    }
+
+    function onTimeout() {
+      if (answered) return;
+      answered = true;
+      streak   = 0;
+      lockButtons(-1, false);  // reveal correct; no chosen button
+      showToast(`⏱  Time's up!  Answer: ${rightAnswer}`, 'bad');
+      fire('timeout', { expected: rightAnswer, score, streak: 0 });
+      updateHUD();
+      setTimeout(nextQ, 1100);
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       UI HELPERS
+    ══════════════════════════════════════════════════════════ */
+    function updateHUD() {
+      document.getElementById('statLevel').textContent  = level;
+      document.getElementById('statScore').textContent  = score;
+      document.getElementById('statStreak').textContent = streak;
+      const pct = (correctInLevel / TO_LEVEL_UP) * 100;
+      document.getElementById('levelProg').style.width  = `${pct}%`;
+      document.getElementById('progLabel').textContent  = `${correctInLevel} / ${TO_LEVEL_UP}`;
+    }
+
+    /**
+     * Disables all buttons and highlights the chosen (correct/wrong)
+     * and the correct answer if the player was wrong.
+     * @param {number} chosenIdx - Button index the player clicked (-1 for timeout)
+     * @param {boolean} isOk
+     */
+    function lockButtons(chosenIdx, isOk) {
+      for (let i = 0; i < 4; i++) {
+        const b = document.getElementById(`btn${i}`);
+        b.disabled = true;
+        if (i === chosenIdx)                                b.classList.add(isOk ? 'correct' : 'wrong');
+        if (!isOk && parseInt(b.dataset.answer, 10) === rightAnswer) b.classList.add('correct');
+      }
+    }
+
+    function resetButtons() {
+      for (let i = 0; i < 4; i++) {
+        const b = document.getElementById(`btn${i}`);
+        b.disabled  = false;
+        b.className = 'ans-btn';
+      }
+    }
+
+    /**
+     * Briefly flashes the question card green (correct) or red (wrong).
+     * @param {boolean} ok
+     */
+    function flashCard(ok) {
+      const card = document.getElementById('questionCard');
+      const cls  = ok ? 'flash-ok' : 'flash-err';
+      card.classList.add(cls);
+      setTimeout(() => card.classList.remove(cls), 380);
+    }
+
+    /**
+     * Shows a status toast and auto-clears it after 2.2 s.
+     * @param {string} text
+     * @param {string} type  - 'good' | 'bad' | 'info' | ''
+     */
+    function showToast(text, type = '') {
+      const toast = document.getElementById('toast');
+      toast.className = `toast ${type}`.trim();
+      document.getElementById('toastText').textContent = text;
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.className = 'toast';
+        document.getElementById('toastText').textContent = '';
+      }, 2200);
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       postMessage BRIDGE  —  fires events to host page
+       All payloads carry source: 'inner-applet' so the host
+       can filter them correctly.
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * @param {string} type  - Event type: game-start | answer | streak | level-up | timeout | custom
+     * @param {object} extra - Additional payload fields
+     */
+    function fire(type, extra = {}) {
+      window.parent.postMessage({
+        source:    'inner-applet',
+        type,
+        timestamp: new Date().toISOString(),
+        ...extra,
+      }, '*');
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       LISTEN for commands from the host page
+       Filters by source === 'host' to ignore unrelated messages.
+    ══════════════════════════════════════════════════════════ */
+    window.addEventListener('message', (event) => {
+      const d = event.data;
+      if (!d || d.source !== 'host') return;
+      handleHostCommand(d);
+    });
+
+    /**
+     * Reacts to commands sent from index.html (Ping / Reset / Alert / custom).
+     * @param {object} payload
+     */
+    function handleHostCommand(payload) {
+      switch (payload.type) {
+        case 'ping':
+          showToast('🏓 Pong — Math Quest alive!', 'info');
+          fire('custom', { label: 'Pong', message: '🏓 Math Quest is responsive!' });
+          break;
+
+        case 'reset':
+          // Stop current game and show start screen
+          clearInterval(timerId);
+          score = streak = bestStreak = correctInLevel = 0;
+          level = 1;
+          document.getElementById('gameUI').classList.add('hidden');
+          document.getElementById('startScreen').classList.remove('hidden');
+          fire('custom', { label: 'Game Reset', message: '↺ Math Quest was reset by host' });
+          break;
+
+        case 'alert':
+          showToast('🔔 Alert from host!', 'info');
+          break;
+
+        default:
+          showToast(`📥 Host: "${escapeText(payload.label || payload.type)}"`, 'info');
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       UTILITIES
+    ══════════════════════════════════════════════════════════ */
+    /** Returns a random integer in [lo, hi] inclusive. */
+    function rnd(lo, hi) {
+      return Math.floor(Math.random() * (hi - lo + 1)) + lo;
+    }
+
+    /** In-place Fisher–Yates shuffle; returns the array. */
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = ~~(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    /**
+     * Strips HTML-significant characters from a string so it is
+     * safe to set as textContent (extra safety, not innerHTML).
+     * @param {string} s
+     * @returns {string}
+     */
+    function escapeText(s) {
+      return String(s).replace(/[<>&"']/g, c => ({
+        '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;',
+      }[c]));
+    }
+  </script>
+
+</body>
+</html>

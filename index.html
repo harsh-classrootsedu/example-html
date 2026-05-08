@@ -588,6 +588,37 @@
       color: var(--accent);
       border: 1px solid #3d8ef830;
     }
+
+    /* ── Applet switcher tabs ───────────────────────────── */
+    .applet-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .applet-tab {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 16px;
+      font-size: 0.71rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+      white-space: nowrap;
+      letter-spacing: 0.04em;
+    }
+    .applet-tab:hover { color: var(--text-muted); }
+    .applet-tab.active {
+      color: var(--text);
+      border-bottom-color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -630,6 +661,23 @@
 
     <!-- ══ APPLET PANE ══════════════════════════════════════ -->
     <section class="applet-pane">
+
+      <!-- Applet switcher tabs — change iframe src by clicking -->
+      <div class="applet-tabs" id="appletTabs">
+        <div class="applet-tab active"
+             data-src="inner_html.html"
+             data-name="Applet Controls"
+             onclick="switchApplet(this)">
+          ⚡ Controls
+        </div>
+        <div class="applet-tab"
+             data-src="inner_math.html"
+             data-name="Math Quest"
+             onclick="switchApplet(this)">
+          🧠 Math Quest
+        </div>
+      </div>
+
       <div class="applet-card">
 
         <!-- Fake browser chrome titlebar -->
@@ -639,7 +687,7 @@
             <div class="tl-dot yellow"></div>
             <div class="tl-dot green"></div>
           </div>
-          <span class="titlebar-url">inner_html.html — Applet Controls</span>
+          <span class="titlebar-url" id="titlebarUrl">inner_html.html — Applet Controls</span>
           <span class="titlebar-badge">sandboxed</span>
         </div>
 
@@ -935,6 +983,39 @@
     document.getElementById('hostMsg').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') sendCustomToApplet();
     });
+
+    /* ══════════════════════════════════════════════════════════
+       APPLET SWITCHER
+       Changes the iframe src when the user clicks a tab.
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Switches the embedded iframe to the selected applet.
+     * Updates tab active state, titlebar URL, and resets the
+     * connection pill so the host waits for the new applet's events.
+     * @param {HTMLElement} tab - Clicked tab element
+     */
+    function switchApplet(tab) {
+      // Update tab selection
+      document.querySelectorAll('.applet-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+
+      const src  = tab.dataset.src;
+      const name = tab.dataset.name;
+
+      // Load the new applet into the iframe
+      document.getElementById('applet').src = src;
+
+      // Update fake browser titlebar URL
+      document.getElementById('titlebarUrl').textContent = `${src} — ${name}`;
+
+      // Reset connection pill to 'waiting' for the new applet
+      const pill  = document.getElementById('connPill');
+      const label = document.getElementById('connLabel');
+      if (pill.classList.contains('connected')) {
+        pill.classList.replace('connected', 'waiting');
+        label.textContent = 'Waiting';
+      }
+    }
   </script>
 
 </body>
