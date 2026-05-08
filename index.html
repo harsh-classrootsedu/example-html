@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Applet Bridge — Event Monitor</title>
+  <style>
+    /* ══════════════════════════════════════════════════════════
+       RESET & DESIGN TOKENS
+    ══════════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Palette */
+      --bg:           #080c14;
+      --surface-1:    #0e1420;
+      --surface-2:    #131a28;
+      --surface-3:    #1a2235;
+      --border:       #1e2d45;
+      --border-soft:  #152032;
+      --text:         #d0d8e8;
+      --text-muted:   #5c7590;
+      --text-dim:     #3a5070;
+      --accent:       #3d8ef8;
+      --accent-glow:  #3d8ef820;
+
+      /* Semantic event colours */
+      --col-click:    #f05678;
+      --col-submit:   #22c97a;
+      --col-warning:  #f8b428;
+      --col-info:     #3d8ef8;
+      --col-custom:   #9b72e8;
+
+      /* Geometry */
+      --header-h:     56px;
+      --statusbar-h:  28px;
+      --log-w:        360px;
+      --radius:       10px;
+    }
+
+    /* ── Base: lock to viewport, NO scroll on body ─────────── */
+    html, body {
+      height: 100%;
+      overflow: hidden;           /* prevents the body growing beyond 100vh */
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       APP SHELL  —  3-row × 2-col grid
+       header / (applet + log) / statusbar
+    ══════════════════════════════════════════════════════════ */
+    .app {
+      display: grid;
+      grid-template-rows: var(--header-h) 1fr var(--statusbar-h);
+      grid-template-columns: 1fr var(--log-w);
+      grid-template-areas:
+        "header     header"
+        "applet     log"
+        "statusbar  statusbar";
+      height: 100vh;              /* exactly the viewport */
+      overflow: hidden;           /* children must NOT escape this box */
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       HEADER
+    ══════════════════════════════════════════════════════════ */
+    .app-header {
+      grid-area: header;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 20px;
+      background: var(--surface-1);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-right: 24px;
+    }
+
+    .brand-icon {
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, #3d8ef8, #9b72e8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+
+    .brand-sub {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+
+    .header-divider {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      margin: 0 20px;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex: 1;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .meta-label { color: var(--text-dim); }
+    .meta-val   { color: var(--text-muted); font-weight: 600; }
+
+    /* Connection pill */
+    .conn-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      border: 1px solid;
+      margin-left: auto;
+    }
+
+    .conn-pill.connected {
+      background: #22c97a12;
+      border-color: #22c97a30;
+      color: #22c97a;
+    }
+
+    .conn-pill.waiting {
+      background: #f8b42812;
+      border-color: #f8b42830;
+      color: #f8b428;
+    }
+
+    .conn-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .conn-pill.connected .conn-dot {
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       APPLET PANE  (left column)
+    ══════════════════════════════════════════════════════════ */
+    .applet-pane {
+      grid-area: applet;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      gap: 0;
+      background: var(--bg);
+      overflow: hidden;           /* KEY FIX: prevents height from growing */
+      min-height: 0;              /* KEY FIX: allows flex child to shrink in grid */
+    }
+
+    /* Inner card that holds the label + iframe */
+    .applet-card {
+      flex: 1;
+      min-height: 0;              /* KEY FIX: flex child must have min-height: 0 */
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--surface-1);
+    }
+
+    /* Card title bar */
+    .applet-titlebar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      flex-shrink: 0;
+    }
+
+    /* macOS-style traffic lights */
+    .tl { display: flex; gap: 6px; }
+    .tl-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+    .tl-dot.red    { background: #f05678; }
+    .tl-dot.yellow { background: #f8b428; }
+    .tl-dot.green  { background: #22c97a; }
+
+    .titlebar-url {
+      flex: 1;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      letter-spacing: 0.03em;
+    }
+
+    .titlebar-badge {
+      font-size: 0.63rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: var(--surface-3);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* The iframe — fills remaining card height */
+    #applet {
+      flex: 1;
+      min-height: 0;              /* KEY FIX: iframe must not push parent taller */
+      width: 100%;
+      border: none;
+      display: block;
+      background: #0a0e1a;
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       LOG PANE  (right column)
+    ══════════════════════════════════════════════════════════ */
+    .log-pane {
+      grid-area: log;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+      background: var(--surface-1);
+      overflow: hidden;           /* KEY FIX */
+      min-height: 0;              /* KEY FIX */
+    }
+
+    /* Log panel header */
+    .log-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 14px;
+      height: 44px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface-2);
+    }
+
+    .log-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    #eventCount {
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid #3d8ef830;
+    }
+
+    /* Spacer pushes clear button to the right */
+    .log-header-spacer { flex: 1; }
+
+    #clearBtn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      border-radius: 6px;
+      padding: 3px 10px;
+      font-size: 0.68rem;
+      cursor: pointer;
+      transition: all 0.18s;
+      letter-spacing: 0.04em;
+    }
+    #clearBtn:hover {
+      border-color: var(--col-click);
+      color: var(--col-click);
+      background: #f0567808;
+    }
+
+    /* Filter tabs */
+    .log-filters {
+      display: flex;
+      gap: 0;
+      padding: 0 14px;
+      border-bottom: 1px solid var(--border-soft);
+      background: var(--surface-1);
+      flex-shrink: 0;
+      overflow-x: auto;
+    }
+
+    .filter-tab {
+      padding: 8px 12px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .filter-tab:hover { color: var(--text-muted); }
+    .filter-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Scrollable event list */
+    #eventLog {
+      flex: 1;
+      min-height: 0;              /* KEY FIX: allows scroll instead of growing */
+      overflow-y: auto;
+      padding: 10px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Empty / waiting state */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--text-dim);
+      font-size: 0.8rem;
+    }
+
+    .empty-icon {
+      font-size: 2.2rem;
+      opacity: 0.35;
+    }
+
+    .empty-state p { color: var(--text-dim); }
+    .empty-state span { font-size: 0.68rem; color: var(--text-dim); opacity: 0.6; }
+
+    /* ── Individual log card ──────────────────────────────── */
+    .log-entry {
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-left: 3px solid var(--text-dim);
+      border-radius: var(--radius);
+      padding: 9px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex-shrink: 0;             /* entries must not compress */
+      animation: entryIn 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      transition: border-color 0.15s;
+    }
+
+    .log-entry:hover { border-color: var(--border); }
+
+    @keyframes entryIn {
+      from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Type-specific left border accent */
+    .log-entry[data-type="click"]   { border-left-color: var(--col-click);   }
+    .log-entry[data-type="submit"]  { border-left-color: var(--col-submit);  }
+    .log-entry[data-type="warning"] { border-left-color: var(--col-warning); }
+    .log-entry[data-type="info"]    { border-left-color: var(--col-info);    }
+    .log-entry[data-type="custom"]  { border-left-color: var(--col-custom);  }
+
+    .entry-top {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .entry-badge {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 7px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .log-entry[data-type="click"]   .entry-badge { background: #f0567818; color: var(--col-click);   border: 1px solid #f0567830; }
+    .log-entry[data-type="submit"]  .entry-badge { background: #22c97a18; color: var(--col-submit);  border: 1px solid #22c97a30; }
+    .log-entry[data-type="warning"] .entry-badge { background: #f8b42818; color: var(--col-warning); border: 1px solid #f8b42830; }
+    .log-entry[data-type="info"]    .entry-badge { background: #3d8ef818; color: var(--col-info);    border: 1px solid #3d8ef830; }
+    .log-entry[data-type="custom"]  .entry-badge { background: #9b72e818; color: var(--col-custom);  border: 1px solid #9b72e830; }
+
+    .entry-label {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .entry-time {
+      font-size: 0.67rem;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    /* Collapsible payload */
+    .entry-payload {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-all;
+      background: var(--surface-3);
+      border: 1px solid var(--border-soft);
+      border-radius: 6px;
+      padding: 6px 8px;
+      line-height: 1.6;
+    }
+
+    /* Sequence number */
+    .entry-seq {
+      font-size: 0.63rem;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Status bar ─────────────────────────────────────────── */
+    .statusbar {
+      grid-area: statusbar;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 16px;
+      background: var(--surface-1);
+      border-top: 1px solid var(--border);
+      font-size: 0.67rem;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    .statusbar-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    #lastEventStatus { color: var(--text-muted); }
+
+    /* Scrollbar theming */
+    #eventLog::-webkit-scrollbar          { width: 3px; }
+    #eventLog::-webkit-scrollbar-track    { background: transparent; }
+    #eventLog::-webkit-scrollbar-thumb    { background: var(--border); border-radius: 3px; }
+    #eventLog::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+    /* ══════════════════════════════════════════════════════════
+       SEND-TO-APPLET PANEL  (host → iframe)
+    ══════════════════════════════════════════════════════════ */
+    .send-panel {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 0 0 0;
+    }
+
+    .send-panel-label {
+      font-size: 0.67rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--text-dim);
+    }
+
+    .send-panel-row {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+
+    /* Preset command buttons */
+    .cmd-btn {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 11px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 0.71rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .cmd-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .cmd-btn:active { transform: scale(0.96); }
+
+    /* Custom command input */
+    .send-input {
+      flex: 1;
+      min-width: 0;
+      padding: 7px 11px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 0.71rem;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .send-input::placeholder { color: var(--text-dim); }
+    .send-input:focus { border-color: var(--accent); }
+
+    .send-btn {
+      padding: 7px 14px;
+      border-radius: 7px;
+      border: 1px solid #3d8ef840;
+      background: #3d8ef818;
+      color: var(--accent);
+      font-size: 0.71rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+    .send-btn:hover { background: #3d8ef830; }
+
+    /* Outbound log entries use blue accent instead of event colour */
+    .log-entry.outbound {
+      border-left-color: var(--accent);
+      opacity: 0.9;
+    }
+    .log-entry.outbound .entry-badge {
+      background: var(--accent-glow);
+      color: var(--accent);
+      border: 1px solid #3d8ef830;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app">
+
+    <!-- ══ HEADER ══════════════════════════════════════════ -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="brand-icon">🧩</div>
+        <div>
+          <div class="brand-name">AppletBridge</div>
+          <div class="brand-sub">postMessage POC</div>
+        </div>
+      </div>
+
+      <div class="header-divider"></div>
+
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-label">Protocol</span>
+          <span class="meta-val">window.postMessage</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Transport</span>
+          <span class="meta-val">bidirectional</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Origin guard</span>
+          <span class="meta-val">source: inner-applet</span>
+        </div>
+      </div>
+
+      <!-- Dynamic connection status pill -->
+      <div class="conn-pill waiting" id="connPill">
+        <span class="conn-dot"></span>
+        <span id="connLabel">Waiting</span>
+      </div>
+    </header>
+
+    <!-- ══ APPLET PANE ══════════════════════════════════════ -->
+    <section class="applet-pane">
+      <div class="applet-card">
+
+        <!-- Fake browser chrome titlebar -->
+        <div class="applet-titlebar">
+          <div class="tl">
+            <div class="tl-dot red"></div>
+            <div class="tl-dot yellow"></div>
+            <div class="tl-dot green"></div>
+          </div>
+          <span class="titlebar-url">inner_html.html — Applet Controls</span>
+          <span class="titlebar-badge">sandboxed</span>
+        </div>
+
+        <!--
+          sandbox attrs:
+            allow-scripts      → JS can run inside, enabling postMessage
+            allow-same-origin  → required for local file:// protocol
+          Remove allow-same-origin when deployed on HTTPS.
+        -->
+        <iframe
+          id="applet"
+          src="inner_html.html"
+          title="Inner Applet"
+          sandbox="allow-scripts allow-same-origin">
+        </iframe>
+
+      </div>
+
+      <!-- ══ Send to Applet  (host → iframe) ══════════════════ -->
+      <div class="send-panel">
+        <div class="send-panel-label">↗ Send to Applet</div>
+        <div class="send-panel-row">
+          <button class="cmd-btn" onclick="sendToApplet('ping',  { label: 'Ping' })">📶 Ping</button>
+          <button class="cmd-btn" onclick="sendToApplet('reset', { label: 'Reset' })">↺ Reset</button>
+          <button class="cmd-btn" onclick="sendToApplet('alert', { label: 'Alert' })">🔔 Alert</button>
+          <input  class="send-input" id="hostMsg" placeholder="Type a command to send…" autocomplete="off" />
+          <button class="send-btn" onclick="sendCustomToApplet()">Send ↗</button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ══ LOG PANE ═════════════════════════════════════════ -->
+    <aside class="log-pane">
+
+      <!-- Panel header -->
+      <div class="log-header">
+        <span class="log-title">Event Log</span>
+        <span id="eventCount">0 events</span>
+        <div class="log-header-spacer"></div>
+        <button id="clearBtn" onclick="clearLog()">Clear</button>
+      </div>
+
+      <!-- Filter tabs -->
+      <div class="log-filters">
+        <div class="filter-tab active" data-filter="all"     onclick="setFilter(this)">All</div>
+        <div class="filter-tab"        data-filter="click"   onclick="setFilter(this)">Click</div>
+        <div class="filter-tab"        data-filter="submit"  onclick="setFilter(this)">Submit</div>
+        <div class="filter-tab"        data-filter="warning" onclick="setFilter(this)">Warning</div>
+        <div class="filter-tab"        data-filter="info"    onclick="setFilter(this)">Info</div>
+        <div class="filter-tab"        data-filter="custom"  onclick="setFilter(this)">Custom</div>
+      </div>
+
+      <!-- Scrollable entries -->
+      <div id="eventLog">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">📡</div>
+          <p>No events received yet</p>
+          <span>Interact with the applet on the left</span>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ══ STATUS BAR ═══════════════════════════════════════ -->
+    <div class="statusbar">
+      <div class="statusbar-item">🔗 <span>Bridge: active</span></div>
+      <div class="statusbar-item">Last: <span id="lastEventStatus">—</span></div>
+      <div class="statusbar-item" style="margin-left:auto; opacity:0.5;">AppletBridge POC · postMessage API</div>
+    </div>
+
+  </div><!-- /.app -->
+
+  <script>
+    /* ══════════════════════════════════════════════════════════
+       STATE
+    ══════════════════════════════════════════════════════════ */
+    let eventCount   = 0;
+    let activeFilter = 'all';
+
+    /* ── Event type metadata ────────────────────────────────── */
+    const TYPE_META = {
+      click:   { icon: '🖱',  label: 'Click'   },
+      submit:  { icon: '✅', label: 'Submit'  },
+      warning: { icon: '⚠️', label: 'Warning' },
+      info:    { icon: 'ℹ️',  label: 'Info'    },
+      custom:  { icon: '✉️',  label: 'Custom'  },
+    };
+
+    /* ══════════════════════════════════════════════════════════
+       postMessage LISTENER
+       Only handles messages whose source === 'inner-applet'
+       to ignore unrelated messages (browser extensions, etc.)
+    ══════════════════════════════════════════════════════════ */
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.source !== 'inner-applet') return;
+      logEvent(data);
+    });
+
+    /* ══════════════════════════════════════════════════════════
+       LOG AN EVENT
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Builds and prepends a styled log card for the received payload.
+     * @param {object} payload - { source, type, timestamp, label?, message? }
+     */
+    function logEvent(payload) {
+      const log = document.getElementById('eventLog');
+
+      // Remove empty-state placeholder on first event
+      const empty = document.getElementById('emptyState');
+      if (empty) empty.remove();
+
+      const meta         = TYPE_META[payload.type] || { icon: '📌', label: payload.type };
+      const displayLabel = payload.label || payload.message || '(no label)';
+      const timeStr      = formatTime(payload.timestamp);
+      const { source, ...rest } = payload;   // strip internal 'source' from displayed payload
+      const payloadJson  = JSON.stringify(rest, null, 2);
+
+      // Build card
+      const entry = document.createElement('div');
+      entry.className    = 'log-entry';
+      entry.dataset.type = payload.type;
+      entry.dataset.seq  = eventCount + 1;
+      entry.innerHTML = `
+        <div class="entry-top">
+          <span class="entry-badge">${escapeHtml(meta.label)}</span>
+          <span class="entry-label">${meta.icon} ${escapeHtml(displayLabel)}</span>
+          <span class="entry-time">${timeStr}</span>
+        </div>
+        <pre class="entry-payload">${escapeHtml(payloadJson)}</pre>
+      `;
+
+      // Apply active filter visibility
+      if (activeFilter !== 'all' && payload.type !== activeFilter) {
+        entry.style.display = 'none';
+      }
+
+      // Newest events at the top
+      log.insertBefore(entry, log.firstChild);
+
+      // Update counter badge
+      eventCount++;
+      document.getElementById('eventCount').textContent =
+        `${eventCount} event${eventCount !== 1 ? 's' : ''}`;
+
+      // Update status bar
+      document.getElementById('lastEventStatus').textContent =
+        `${meta.icon} ${escapeHtml(displayLabel)} · ${timeStr}`;
+
+      // Mark connection as live on first event
+      const pill  = document.getElementById('connPill');
+      const label = document.getElementById('connLabel');
+      if (pill.classList.contains('waiting')) {
+        pill.classList.replace('waiting', 'connected');
+        label.textContent = 'Connected';
+      }
+
+      console.log('[AppletBridge]', payload);
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       FILTER TABS
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Activates a filter tab and shows/hides log entries accordingly.
+     * @param {HTMLElement} tab - The clicked tab element
+     */
+    function setFilter(tab) {
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeFilter = tab.dataset.filter;
+
+      document.querySelectorAll('.log-entry').forEach(entry => {
+        const show = activeFilter === 'all' || entry.dataset.type === activeFilter;
+        entry.style.display = show ? '' : 'none';
+      });
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       CLEAR LOG
+    ══════════════════════════════════════════════════════════ */
+    function clearLog() {
+      const log = document.getElementById('eventLog');
+      log.innerHTML = `
+        <div class="empty-state" id="emptyState">
+          <div class="empty-icon">📡</div>
+          <p>No events received yet</p>
+          <span>Interact with the applet on the left</span>
+        </div>
+      `;
+      eventCount = 0;
+      document.getElementById('eventCount').textContent  = '0 events';
+      document.getElementById('lastEventStatus').textContent = '—';
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       UTILITIES
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Formats an ISO-8601 timestamp to HH:MM:SS.
+     * @param {string} iso
+     * @returns {string}
+     */
+    function formatTime(iso) {
+      try { return new Date(iso).toLocaleTimeString([], { hour12: false }); }
+      catch { return '--:--:--'; }
+    }
+
+    /**
+     * Escapes HTML special characters to prevent XSS
+     * from untrusted event payload content.
+     * @param {string} str
+     * @returns {string}
+     */
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#39;');
+    }
+
+    /* ══════════════════════════════════════════════════════════
+       SEND TO APPLET  (host → iframe via contentWindow.postMessage)
+    ══════════════════════════════════════════════════════════ */
+    /**
+     * Posts a command payload into the iframe's content window.
+     * @param {string} cmd   - Command type: ping | reset | alert | command
+     * @param {object} extra - Additional payload fields
+     */
+    function sendToApplet(cmd, extra = {}) {
+      const iframe = document.getElementById('applet');
+      const payload = {
+        source:    'host',
+        type:      cmd,
+        timestamp: new Date().toISOString(),
+        ...extra,
+      };
+
+      // Send directly into the iframe's JS context
+      iframe.contentWindow.postMessage(payload, '*');
+
+      // Mirror the outbound message in the log panel
+      logOutbound(payload);
+    }
+
+    /** Reads the host input field and sends a custom command to the applet. */
+    function sendCustomToApplet() {
+      const input = document.getElementById('hostMsg');
+      const msg   = input.value.trim();
+      if (!msg) { input.focus(); return; }
+      sendToApplet('command', { label: msg });
+      input.value = '';
+    }
+
+    /**
+     * Appends an outbound entry to the log panel so both traffic
+     * directions are visible in a single stream.
+     * @param {object} payload
+     */
+    function logOutbound(payload) {
+      const log = document.getElementById('eventLog');
+
+      // Remove empty-state on first activity
+      const empty = document.getElementById('emptyState');
+      if (empty) empty.remove();
+
+      const displayLabel = payload.label || payload.type;
+      const timeStr      = formatTime(payload.timestamp);
+      const { source, ...rest } = payload;
+      const payloadJson  = JSON.stringify(rest, null, 2);
+
+      const entry = document.createElement('div');
+      entry.className    = 'log-entry outbound';
+      entry.dataset.type = 'outbound';
+      entry.innerHTML = `
+        <div class="entry-top">
+          <span class="entry-badge">↗ HOST</span>
+          <span class="entry-label">📤 ${escapeHtml(displayLabel)}</span>
+          <span class="entry-time">${timeStr}</span>
+        </div>
+        <pre class="entry-payload">${escapeHtml(payloadJson)}</pre>
+      `;
+
+      log.insertBefore(entry, log.firstChild);
+      console.log('[AppletBridge → Applet]', payload);
+    }
+
+    // Allow Enter key in the host send input
+    document.getElementById('hostMsg').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendCustomToApplet();
+    });
+  </script>
+
+</body>
+</html>

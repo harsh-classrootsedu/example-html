@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Applet – Inner Panel</title>
+  <style>
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base ──────────────────────────────────────────────── */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #080c14;
+      color: #d0d8e8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Panel card ────────────────────────────────────────── */
+    .panel {
+      width: 100%;
+      max-width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* ── Section heading ───────────────────────────────────── */
+    .section-label {
+      font-size: 0.67rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #3a5070;
+      margin-bottom: 4px;
+    }
+
+    /* ── Preset event buttons ──────────────────────────────── */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 10px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      transition: transform 0.1s, opacity 0.15s, box-shadow 0.2s;
+      user-select: none;
+      background: transparent;
+    }
+
+    .btn:hover  { opacity: 0.88; }
+    .btn:active { transform: scale(0.95); }
+
+    .btn-click {
+      background: #f0567818;
+      border-color: #f0567840;
+      color: #f05678;
+    }
+    .btn-click:hover   { background: #f0567828; box-shadow: 0 0 16px #f0567820; }
+
+    .btn-submit {
+      background: #22c97a18;
+      border-color: #22c97a40;
+      color: #22c97a;
+    }
+    .btn-submit:hover  { background: #22c97a28; box-shadow: 0 0 16px #22c97a20; }
+
+    .btn-warning {
+      background: #f8b42818;
+      border-color: #f8b42840;
+      color: #f8b428;
+    }
+    .btn-warning:hover { background: #f8b42828; box-shadow: 0 0 16px #f8b42820; }
+
+    .btn-info {
+      background: #3d8ef818;
+      border-color: #3d8ef840;
+      color: #3d8ef8;
+    }
+    .btn-info:hover    { background: #3d8ef828; box-shadow: 0 0 16px #3d8ef820; }
+
+    /* ── Divider ───────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: #1e2d45;
+    }
+
+    /* ── Custom event row ──────────────────────────────────── */
+    .custom-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .custom-input {
+      flex: 1;
+      padding: 9px 12px;
+      border-radius: 7px;
+      border: 1px solid #1e2d45;
+      background: #0e1420;
+      color: #d0d8e8;
+      font-size: 0.78rem;
+      outline: none;
+      transition: border-color 0.15s;
+      font-family: inherit;
+    }
+    .custom-input::placeholder { color: #3a5070; }
+    .custom-input:focus { border-color: #3d8ef8; }
+
+    .btn-send {
+      padding: 9px 14px;
+      border-radius: 7px;
+      border: 1px solid #9b72e840;
+      background: #9b72e818;
+      color: #9b72e8;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.2s;
+      white-space: nowrap;
+    }
+    .btn-send:hover { background: #9b72e828; box-shadow: 0 0 16px #9b72e820; }
+
+    /* ── Status toast ──────────────────────────────────────── */
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 7px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      font-size: 0.72rem;
+      color: #3a5070;
+      min-height: 36px;
+      transition: color 0.3s, border-color 0.3s;
+    }
+
+    .toast-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #3a5070;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+
+    .toast.fired {
+      color: #a9e34b;
+      border-color: #a9e34b30;
+    }
+    .toast.fired .toast-dot { background: #a9e34b; }
+
+    /* ── Inbox: messages received from host ────────────────── */
+    .inbox {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+
+    .inbox::-webkit-scrollbar       { width: 3px; }
+    .inbox::-webkit-scrollbar-track { background: transparent; }
+    .inbox::-webkit-scrollbar-thumb { background: #1e2d45; border-radius: 3px; }
+
+    .inbox-empty {
+      font-size: 0.68rem;
+      color: #3a5070;
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    .inbox-entry {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: #0e1420;
+      border: 1px solid #1e2d45;
+      border-left: 2px solid #3d8ef8;
+      animation: inboxIn 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      flex-shrink: 0;
+    }
+
+    @keyframes inboxIn {
+      from { opacity: 0; transform: translateX(-6px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .inbox-type {
+      font-size: 0.6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #3d8ef8;
+      background: #3d8ef818;
+      border: 1px solid #3d8ef830;
+      border-radius: 4px;
+      padding: 1px 6px;
+      flex-shrink: 0;
+    }
+
+    .inbox-label {
+      font-size: 0.73rem;
+      color: #d0d8e8;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .inbox-time {
+      font-size: 0.64rem;
+      color: #3a5070;
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+    }
+
+    /* Allow panel to scroll if content overflows viewport */
+    .panel {
+      overflow-y: auto;
+      max-height: calc(100vh - 40px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="panel">
+
+    <!-- Preset buttons -->
+    <div>
+      <div class="section-label">Dispatch Event</div>
+      <div class="btn-grid">
+        <button class="btn btn-click"   onclick="fire('click',   { label: 'Primary Click' })">🖱 Click</button>
+        <button class="btn btn-submit"  onclick="fire('submit',  { label: 'Form Submit'   })">✅ Submit</button>
+        <button class="btn btn-warning" onclick="fire('warning', { label: 'Warning Alert' })">⚠ Warning</button>
+        <button class="btn btn-info"    onclick="fire('info',    { label: 'Info Pulse'    })">ℹ Info</button>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Custom event -->
+    <div>
+      <div class="section-label">Custom Message</div>
+      <div class="custom-row">
+        <input
+          class="custom-input"
+          id="customMsg"
+          placeholder="Type a custom message…"
+          autocomplete="off"
+        />
+        <button class="btn-send" onclick="fireCustom()">Send ↗</button>
+      </div>
+    </div>
+
+    <!-- Status feedback -->
+    <div class="toast" id="toast">
+      <span class="toast-dot"></span>
+      <span id="statusText">Waiting for interaction…</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Inbox: commands/messages received from host -->
+    <div>
+      <div class="section-label">📥 From Host</div>
+      <div class="inbox" id="inbox">
+        <div class="inbox-empty" id="inboxEmpty">No commands received yet…</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /**
+     * Fires a structured event to the parent host via postMessage.
+     * The `source` field is used by the host to filter applet messages.
+     *
+     * @param {string} type  - Event category: click | submit | warning | info | custom
+     * @param {object} extra - Additional payload fields (label, message, etc.)
+     */
+    function fire(type, extra = {}) {
+      const payload = {
+        source:    'inner-applet',        // identifier for the host's message guard
+        type,
+        timestamp: new Date().toISOString(),
+        ...extra,
+      };
+
+      // Send to parent; '*' is acceptable for local file:// POC demos.
+      // Replace '*' with the explicit host origin in production (e.g., 'https://your-domain.com').
+      window.parent.postMessage(payload, '*');
+
+      // Visual feedback inside the applet
+      const displayName = extra.label || extra.message || type;
+      showToast(`Fired [${type}]: "${displayName}"`);
+    }
+
+    /** Reads the custom input and fires a custom event. */
+    function fireCustom() {
+      const input = document.getElementById('customMsg');
+      const msg   = input.value.trim();
+      if (!msg) { input.focus(); return; }
+      fire('custom', { message: msg });
+      input.value = '';
+    }
+
+    /**
+     * Shows a brief status message in the toast bar,
+     * then fades back to idle after 2 seconds.
+     * @param {string} text
+     */
+    function showToast(text) {
+      const toast  = document.getElementById('toast');
+      const status = document.getElementById('statusText');
+      status.textContent = text;
+      toast.classList.add('fired');
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(() => {
+        toast.classList.remove('fired');
+        status.textContent = 'Waiting for interaction…';
+      }, 2000);
+    }
+
+    // Allow pressing Enter in the custom input
+    document.getElementById('customMsg').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') fireCustom();
+    });
+
+    /* ══════════════════════════════════════════════════════════
+       LISTEN FOR COMMANDS FROM HOST  (parent → this frame)
+       Filters by source === 'host' to ignore unrelated messages.
+    ══════════════════════════════════════════════════════════ */
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.source !== 'host') return;
+      receiveFromHost(data);
+    });
+
+    /**
+     * Handles a payload sent by the host page.
+     * Adds it to the inbox and reacts to known command types.
+     * @param {object} payload - { source, type, timestamp, label? }
+     */
+    function receiveFromHost(payload) {
+      const inbox = document.getElementById('inbox');
+
+      // Remove the empty-state placeholder
+      const empty = document.getElementById('inboxEmpty');
+      if (empty) empty.remove();
+
+      const displayLabel = payload.label || payload.type;
+      const timeStr = new Date(payload.timestamp).toLocaleTimeString([], { hour12: false });
+
+      // Build inbox entry
+      const entry = document.createElement('div');
+      entry.className = 'inbox-entry';
+      entry.innerHTML = `
+        <span class="inbox-type">${escapeHtml(payload.type)}</span>
+        <span class="inbox-label">${escapeHtml(displayLabel)}</span>
+        <span class="inbox-time">${timeStr}</span>
+      `;
+
+      // Newest at the top
+      inbox.insertBefore(entry, inbox.firstChild);
+
+      // React to known commands
+      switch (payload.type) {
+        case 'ping':
+          showToast('🏓 Ping from host — sending Pong…');
+          // Automatically reply with a pong event
+          fire('custom', { label: 'Pong', message: '🏓 Pong — alive and responsive!' });
+          break;
+        case 'reset':
+          showToast('↺ Reset by host');
+          document.getElementById('customMsg').value = '';
+          break;
+        case 'alert':
+          showToast('🔔 Alert received from host!');
+          break;
+        default:
+          showToast(`📥 Host: “${displayLabel}”`);
+      }
+    }
+
+    /**
+     * Escapes HTML special characters to prevent XSS
+     * in dynamically rendered inbox content.
+     * @param {string} str
+     * @returns {string}
+     */
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g,  '&amp;')
+        .replace(/</g,  '&lt;')
+        .replace(/>/g,  '&gt;')
+        .replace(/"/g,  '&quot;')
+        .replace(/'/g,  '&#39;');
+    }
+  </script>
+
+</body>
+</html>
